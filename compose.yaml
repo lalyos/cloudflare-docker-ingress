@@ -1,0 +1,45 @@
+name: demo
+
+services:
+  lunch:
+    container_name: lunch
+    image: lalyos/12factor:v2.0
+    environment:
+      - TITLE=Lunchtime
+    ports:
+      - 80
+
+  dinner:
+    container_name: dinner
+    image: lalyos/12factor:v2.0
+    environment:
+      - TITLE=Dinner
+      - COLOR2=red
+    ports:
+      - 80
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    environment:
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      - cloudflare-tunnel-manager
+
+  cloudflare-tunnel-manager:
+    build: .
+    container_name: cloudflare-tunnel-manager
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./templates:/etc/docker-gen/templates:ro
+      - ./scripts:/scripts:ro
+      - ./config:/config
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+      - CLOUDFLARE_TUNNEL_NAME=${CLOUDFLARE_TUNNEL_NAME:-default-tunnel}
+      - CLOUDFLARE_DEFAULT_DOMAIN=${CLOUDFLARE_DEFAULT_DOMAIN}
+      - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID:-}
+    command: -notify "/scripts/update-tunnel.sh" -notify-output -watch /etc/docker-gen/templates/tunnel-config.tmpl /config/tunnel-config.json
+    restart: unless-stopped

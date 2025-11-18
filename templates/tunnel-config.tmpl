@@ -1,0 +1,45 @@
+{{- /* Template for generating tunnel configuration from Docker containers */}}
+{{- $defaultDomain := or (env "CLOUDFLARE_DEFAULT_DOMAIN") "lvh.me" }}
+{{- $first := true }}
+[
+{{- range $container := $ }}
+  {{- /* Check if tunnel is explicitly disabled */}}
+  {{- $enabled := or (index $container.Labels "cloudflare.tunnel.enable") "true" }}
+  {{- if ne $enabled "false" }}
+    {{- /* Get exposed ports */}}
+    {{- $ports := $container.Addresses }}
+    {{- $selectedPort := "" }}
+
+    {{- /* Check for label override first */}}
+    {{- $portLabel := index $container.Labels "cloudflare.tunnel.port" }}
+    {{- if $portLabel }}
+      {{- $selectedPort = $portLabel }}
+    {{- else }}
+      {{- /* Auto-detect if only one port is exposed */}}
+      {{- if eq (len $ports) 1 }}
+        {{- range $addr := $ports }}
+          {{- $selectedPort = $addr.Port }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+
+    {{- /* Only proceed if we have a port */}}
+    {{- if $selectedPort }}
+      {{- /* Generate hostname */}}
+      {{- $hostname := index $container.Labels "cloudflare.tunnel.hostname" }}
+      {{- if not $hostname }}
+        {{- $hostname = printf "%s.%s" $container.Name $defaultDomain }}
+      {{- end }}
+      {{- if not $first }},{{- end }}
+  {
+    "container_name": "{{ $container.Name }}",
+    "container_id": "{{ $container.ID }}",
+    "hostname": "{{ $hostname }}",
+    "service": "http://{{ $container.Name }}:{{ $selectedPort }}",
+    "port": "{{ $selectedPort }}"
+  }
+      {{- $first = false }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+]

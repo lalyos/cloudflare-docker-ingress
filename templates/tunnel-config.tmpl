@@ -1,5 +1,5 @@
 {{- /* Template for generating tunnel configuration from Docker containers */}}
-{{- $defaultDomain := or (env "CLOUDFLARE_DEFAULT_DOMAIN") "lvh.me" }}
+{{- $defaultDomain := or (env "CLOUDFLARE_DOMAIN") "lvh.me" }}
 {{- $first := true }}
 [
 {{- range $container := $ }}

@@ -10,9 +10,9 @@ LOG_PREFIX="[ctm]"
 
 # Required environment variables
 : "${CLOUDFLARE_API_TOKEN:?Environment variable CLOUDFLARE_API_TOKEN is required}"
+: "${CLOUDFLARE_TUNNEL_ID:?Environment variable CLOUDFLARE_TUNNEL_ID is required}"
+: "${CLOUDFLARE_ZONE_ID:?Environment variable CLOUDFLARE_ZONE_ID is required}"
 : "${CLOUDFLARE_ACCOUNT_ID:?Environment variable CLOUDFLARE_ACCOUNT_ID is required}"
-: "${CLOUDFLARE_TUNNEL_NAME:?Environment variable CLOUDFLARE_TUNNEL_NAME is required}"
-: "${CLOUDFLARE_DEFAULT_DOMAIN:?Environment variable CLOUDFLARE_DEFAULT_DOMAIN is required}"
 
 API_BASE="https://api.cloudflare.com/client/v4"
 
@@ -44,107 +44,6 @@ cf_api() {
     curl "${curl_args[@]}" "${API_BASE}${endpoint}"
 }
 
-# Get or create Zone ID from domain
-get_zone_id() {
-    if [ -n "$CLOUDFLARE_ZONE_ID" ]; then
-        echo "$CLOUDFLARE_ZONE_ID"
-        return
-    fi
-
-    log "Looking up Zone ID for domain: $CLOUDFLARE_DEFAULT_DOMAIN"
-    local response
-    response=$(cf_api GET "/zones?name=$CLOUDFLARE_DEFAULT_DOMAIN")
-
-    local zone_id
-    zone_id=$(echo "$response" | jq -r '.result[0].id // empty')
-
-    if [ -z "$zone_id" ]; then
-        error "Could not find zone for domain: $CLOUDFLARE_DEFAULT_DOMAIN"
-        return 1
-    fi
-
-    echo "$zone_id"
-}
-
-# Get or create tunnel
-get_or_create_tunnel() {
-    log "Checking for existing tunnel: $CLOUDFLARE_TUNNEL_NAME"
-
-    local response
-    response=$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel?is_deleted=false")
-
-    local tunnel_id
-    tunnel_id=$(echo "$response" | jq -r ".result[] | select(.name == \"$CLOUDFLARE_TUNNEL_NAME\") | .id // empty")
-
-    if [ -n "$tunnel_id" ]; then
-        log "Found existing tunnel: $tunnel_id"
-        echo "$tunnel_id"
-        return
-    fi
-
-    log "Creating new tunnel: $CLOUDFLARE_TUNNEL_NAME (remotely-managed)"
-
-    response=$(cf_api POST "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel" "{\"name\": \"$CLOUDFLARE_TUNNEL_NAME\", \"config_src\": \"cloudflare\"}")
-
-    tunnel_id=$(echo "$response" | jq -r '.result.id // empty')
-
-    if [ -z "$tunnel_id" ]; then
-        error "Failed to create tunnel"
-        error "Response: $response"
-        return 1
-    fi
-
-    log "Created tunnel: $tunnel_id"
-
-    # Get tunnel token for remotely-managed tunnel
-    local token
-    token=$(get_tunnel_token "$tunnel_id") || return 1
-
-    # Save token for cloudflared to use
-    echo "$token" > /config/tunnel-token
-
-    log "Tunnel token saved to /config/tunnel-token"
-
-    echo "$tunnel_id"
-}
-
-# Get tunnel token for existing tunnel
-get_tunnel_token() {
-    local tunnel_id="$1"
-
-    log "Fetching tunnel token for: $tunnel_id"
-
-    local response
-    response=$(cf_api GET "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$tunnel_id/token")
-
-    local token
-    token=$(echo "$response" | jq -r '.result // empty')
-
-    if [ -z "$token" ]; then
-        error "Failed to get tunnel token"
-        error "Response: $response"
-        return 1
-    fi
-
-    echo "$token"
-}
-
-# Add or update tunnel route
-add_tunnel_route() {
-    local tunnel_id="$1"
-    local hostname="$2"
-    local service="$3"
-    local zone_id="$4"
-
-    log "Adding route for $hostname"
-
-    # Create CNAME record for the tunnel
-    # Note: Cloudflare API doesn't support updating tunnel ingress rules via API
-    # when using API tokens. Instead, we'll just set up DNS and document
-    # that users need to run cloudflared with appropriate config
-
-    log "Route configuration complete (DNS record created)"
-}
 
 # Create or update DNS record
 upsert_dns_record() {
@@ -221,22 +120,9 @@ main() {
     local current_containers
     current_containers=$(jq -c '.' "$CONFIG_FILE")
 
-    # Get zone ID
-    local zone_id
-    zone_id=$(get_zone_id) || return 1
-
-    # Get or create tunnel
-    local tunnel_id
-    tunnel_id=$(get_or_create_tunnel) || return 1
-
-    # Ensure tunnel token exists
-    if [ ! -f /config/tunnel-token ]; then
-        log "Tunnel token not found, fetching from API"
-        local token
-        token=$(get_tunnel_token "$tunnel_id") || return 1
-        echo "$token" > /config/tunnel-token
-        log "Tunnel token saved to /config/tunnel-token"
-    fi
+    # Use tunnel ID from environment
+    local tunnel_id="$CLOUDFLARE_TUNNEL_ID"
+    log "Using tunnel ID: $tunnel_id"
 
     # Build tunnel configuration
     local ingress_rules="[]"
@@ -261,7 +147,7 @@ main() {
         ingress_rules=$(echo "$ingress_rules" | jq ". += [{\"hostname\": \"$hostname\", \"service\": \"$service\"}]")
 
         # Update DNS record
-        upsert_dns_record "$zone_id" "$hostname" "$tunnel_id"
+        upsert_dns_record "$CLOUDFLARE_ZONE_ID" "$hostname" "$tunnel_id"
     done
 
     # Add catch-all rule (required by Cloudflare)
@@ -299,7 +185,7 @@ main() {
         while IFS= read -r hostname; do
             if [ -n "$hostname" ] && ! echo "$current_hostnames" | grep -q "^$hostname$"; then
                 log "Container removed, cleaning up: $hostname"
-                delete_dns_record "$zone_id" "$hostname"
+                delete_dns_record "$CLOUDFLARE_ZONE_ID" "$hostname"
             fi
         done <<< "$previous_hostnames"
     fi

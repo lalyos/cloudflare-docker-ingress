@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# Environment and config
+.env
+.env.*
+config/
+
+# Documentation
+*.md
+README.md
+SETUP.md
+
+# Development
+.vscode/
+.idea/
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store

@@ -7,10 +7,17 @@ cp .env.example .env
 nano .env
 ```
 
-Fill in the required values:
-- `CLOUDFLARE_API_TOKEN` - API token with Tunnel and DNS permissions
+**Recommended:** Run the setup wizard to automatically generate your `.env`:
+
+```bash
+./setup.sh
+```
+
+Or manually fill in the values:
+- `CLOUDFLARE_API_TOKEN` - API token (create at https://dash.cloudflare.com/profile/api-tokens)
+- `CLOUDFLARE_DOMAIN` - Your domain (e.g., `example.com`)
+- `CLOUDFLARE_ZONE_ID` - Zone ID for your domain
 - `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
-- `CLOUDFLARE_DEFAULT_DOMAIN` - Your domain (e.g., `example.com`)
 - `CLOUDFLARE_TUNNEL_NAME` - Name for your tunnel (e.g., `docker-tunnel`)
 
 ## Step 2: Start the Tunnel Manager
@@ -20,8 +27,6 @@ docker-compose up -d cloudflare-tunnel-manager
 ```
 
 This will:
-- Create a remotely-managed Cloudflare tunnel (if it doesn't exist)
-- Fetch and save the tunnel token to `config/tunnel-token`
 - Monitor your Docker containers
 - Create DNS records automatically
 - Push ingress configuration to Cloudflare API
@@ -32,7 +37,7 @@ This will:
 docker-compose up -d cloudflared
 ```
 
-The tunnel token is automatically available in `config/tunnel-token`.
+The tunnel token from `.env` is used automatically.
 
 ## Step 4: Verify
 
@@ -64,8 +69,8 @@ Routes update automatically without restarting cloudflared.
 
 ### Cloudflared won't start
 
-- Check that `config/tunnel-token` exists
-- Verify the tunnel manager ran successfully: `docker logs cloudflare-tunnel-manager`
+- Check that `CLOUDFLARE_TUNNEL_TOKEN` is set in `.env`
+- Verify the setup script ran successfully: `./setup.sh`
 - Check cloudflared logs: `docker logs cloudflared`
 
 ### DNS not resolving

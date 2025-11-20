@@ -26,6 +26,11 @@ services:
       - cloudflare-tunnel-manager
 
   cloudflare-tunnel-manager:
+    build:
+      context: .
+      platforms:
+        - linux/amd64
+        - linux/arm64
     image: lalyos/cf-docker-ing:latest
     container_name: cloudflare-tunnel-manager
     volumes:

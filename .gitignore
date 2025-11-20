@@ -2,4 +2,5 @@
 .env
 config/
 *.log
-tunnel-state.json
+*.bak
+*.json

@@ -28,7 +28,14 @@
       {{- /* Generate hostname */}}
       {{- $hostname := index $container.Labels "cloudflare.tunnel.hostname" }}
       {{- if not $hostname }}
-        {{- $hostname = printf "%s.%s" $container.Name $defaultDomain }}
+        {{- /* Use service.project.domain if compose, otherwise container name */}}
+        {{- $projectLabel := index $container.Labels "com.docker.compose.project" }}
+        {{- $serviceLabel := index $container.Labels "com.docker.compose.service" }}
+        {{- if and $projectLabel $serviceLabel }}
+          {{- $hostname = printf "%s.%s.%s" $serviceLabel $projectLabel $defaultDomain }}
+        {{- else }}
+          {{- $hostname = printf "%s.%s" $container.Name $defaultDomain }}
+        {{- end }}
       {{- end }}
       {{- if not $first }},{{- end }}
   {

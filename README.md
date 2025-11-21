@@ -61,10 +61,10 @@ The tunnel manager automatically detects containers on the same Docker network.
 #### Example: Simple Web App
 
 ```yaml
-version: '3.8'
+name: myproject
 
 services:
-  my-web-app:
+  web:
     image: nginx:alpine
     ports:
       - "80"
@@ -76,7 +76,7 @@ Start your app:
 docker-compose up -d
 ```
 
-Your app is now accessible at: `http://my-web-app.yourdomain.com`
+Your app is now accessible at: `http://web.myproject.yourdomain.com`
 
 ## Configuration
 
@@ -98,7 +98,13 @@ Edit `.env` file:
 
 ### Convention Rules
 
-1. **Hostname Generation**: `<container-name>.<CLOUDFLARE_DOMAIN>`
+1. **Hostname Generation**:
+   - **Docker Compose containers**: `<service>.<project>.<CLOUDFLARE_DOMAIN>`
+     - Example: Service `web` in project `myapp` → `web.myapp.example.com`
+   - **Standalone containers**: `<container-name>.<CLOUDFLARE_DOMAIN>`
+     - Example: Container `nginx` → `nginx.example.com`
+   - **Custom override**: Use label `cloudflare.tunnel.hostname: "custom.example.com"`
+
 2. **Port Detection**:
    - One exposed port → automatically used
    - Multiple ports → skipped (use label override)

@@ -1,6 +1,7 @@
 # Cloudflare Docker Ingress
 
 Automatic Cloudflare Tunnel ingress controller for Docker containers using convention over configuration.
+Its similar to traefik with docker backend, or https://github.com/nginx-proxy/nginx-proxy but uses cloudflare tunnels.
 
 **Docker Image:** `lalyos/cf-docker-ing`
 

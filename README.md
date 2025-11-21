@@ -3,7 +3,7 @@
 Automatic Cloudflare Tunnel ingress controller for Docker containers using convention over configuration.
 Its similar to traefik with docker backend, or https://github.com/nginx-proxy/nginx-proxy but uses cloudflare tunnels.
 
-**Docker Image:** `lalyos/cf-docker-ing`
+Its an elegant solution if your machine doesn't have a public IP address. 
 
 ## Features
 
@@ -20,6 +20,7 @@ Its similar to traefik with docker backend, or https://github.com/nginx-proxy/ng
 - Docker and Docker Compose installed
 - Cloudflare account with a domain
 
+For the domain hosting at Cloudflare you can use the free tier, and you can buy a cheap domain for less than 10 eur/year. (at namecheap: *.lol, *.yo, *.eu)
 
 ## Step 1: Configure Environment Variables
 
@@ -43,18 +44,18 @@ Or manually fill in the values:
 
 - See: "Manual API Token Setup" below
 
-### 3. Start the Tunnel Manager
+### 3. Start Services
 
 ```bash
 docker-compose up -d
 ```
 
-This will start both:
-- **Tunnel Manager** - Monitors Docker containers, creates DNS records, and pushes ingress configuration
-- **Cloudflared** - Establishes the tunnel connection using the token from `.env`
+This starts three containers:
+- **cloudflare-tunnel-manager** - Monitors containers, manages DNS and ingress config
+- **network-connector** - Connects cloudflared to all Docker networks
+- **cloudflared** - Establishes the tunnel connection
 
-
-### 5. Deploy Your Applications
+### 4. Deploy Your Applications
 
 The tunnel manager automatically detects containers on the same Docker network.
 
@@ -134,17 +135,22 @@ services:
 
 ## How It Works
 
-1. **docker-gen** monitors Docker events for container changes
-2. Template extracts container metadata (name, ports, labels)
-3. Generates JSON configuration with routing rules
-4. Triggers bash script on any change
-5. Script:
-   - Creates remotely-managed Cloudflare tunnel (if needed)
-   - Manages DNS records (CNAME to tunnel)
-   - Pushes ingress configuration to Cloudflare API
-   - Cleans up removed containers
+The solution consists of three containers:
 
-**Note:** This tool creates a remotely-managed tunnel and pushes configuration via API. Routes update automatically without restarting `cloudflared`. You'll need to run `cloudflared` separately to establish the actual tunnel connection. See [Running Cloudflared](#running-cloudflared) below.
+| Container | Description |
+|-----------|-------------|
+| `cloudflare-tunnel-manager` | Monitors Docker containers, manages DNS records, pushes ingress config to Cloudflare API |
+| `network-connector` | Auto-connects cloudflared to all Docker bridge networks |
+| `cloudflared` | Establishes tunnel connection and routes traffic to containers |
+
+**Flow:**
+1. **docker-gen** monitors Docker events for container changes
+2. Template extracts container metadata (name, ports, labels, IP addresses)
+3. Tunnel manager creates DNS records and pushes ingress rules to Cloudflare
+4. Network connector ensures cloudflared is connected to all Docker networks
+5. Cloudflared routes incoming traffic to containers by IP address
+
+Routes update automatically without restarting any container.
 
 
 ## Troubleshooting
@@ -165,6 +171,9 @@ services:
 ```bash
 # Check tunnel manager logs
 docker logs cloudflare-tunnel-manager
+
+# Check network connector logs
+docker logs network-connector
 
 # Check cloudflared logs
 docker logs cloudflared

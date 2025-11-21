@@ -1,0 +1,13 @@
+{{- /* Template for connecting cloudflared to all Docker bridge networks */}}
+{{- $cloudflaredContainer := env "CLOUDFLARED_CONTAINER" | default "cloudflared" }}
+{{- $networks := dict }}
+{{- range $container := $ }}
+  {{- range $net := $container.Networks }}
+    {{- if and $net.Name (ne $net.Name "host") (ne $net.Name "none") }}
+      {{- $_ := set $networks $net.Name true }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- range $name, $_ := $networks }}
+{{ $name }}
+{{- end }}

@@ -20,6 +20,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
+    container_name: cloudflared
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     restart: unless-stopped
     depends_on:
@@ -46,3 +47,19 @@ services:
       - CLOUDFLARE_TUNNEL_ID=${CLOUDFLARE_TUNNEL_ID}
     command: -notify "/scripts/update-tunnel.sh" -notify-output -watch /etc/docker-gen/templates/tunnel-config.tmpl /config/tunnel-config.json
     restart: unless-stopped
+
+  network-connector:
+    image: lalyos/cf-docker-ing:latest
+    container_name: network-connector
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./templates:/etc/docker-gen/templates:ro
+      - ./scripts:/scripts:ro
+      - ./config:/config
+    environment:
+      - CLOUDFLARED_CONTAINER=cloudflared
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    command: -notify "/scripts/network-connector.sh" -notify-output -watch /etc/docker-gen/templates/network-connector.tmpl /config/networks.txt
+    restart: unless-stopped
+    depends_on:
+      - cloudflared

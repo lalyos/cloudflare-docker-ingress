@@ -11,7 +11,8 @@ RUN apk add --no-cache \
     bash \
     curl \
     jq \
-    openssl
+    openssl \
+    cmd:docker
 
 # Set bash as the default shell for scripts
 ENV SHELL=/bin/bash

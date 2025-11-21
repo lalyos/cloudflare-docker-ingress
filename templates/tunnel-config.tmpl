@@ -25,6 +25,13 @@
 
     {{- /* Only proceed if we have a port */}}
     {{- if $selectedPort }}
+      {{- /* Get container IP address from first network */}}
+      {{- $containerIP := "" }}
+      {{- range $net := $container.Networks }}
+        {{- if not $containerIP }}
+          {{- $containerIP = $net.IP }}
+        {{- end }}
+      {{- end }}
       {{- /* Generate hostname */}}
       {{- $hostname := index $container.Labels "cloudflare.tunnel.hostname" }}
       {{- if not $hostname }}
@@ -37,15 +44,17 @@
           {{- $hostname = printf "%s.%s" $container.Name $defaultDomain }}
         {{- end }}
       {{- end }}
-      {{- if not $first }},{{- end }}
+      {{- if and $containerIP (not $first) }},{{- end }}
+      {{- if $containerIP }}
   {
     "container_name": "{{ $container.Name }}",
     "container_id": "{{ $container.ID }}",
     "hostname": "{{ $hostname }}",
-    "service": "http://{{ $container.Name }}:{{ $selectedPort }}",
+    "service": "http://{{ $containerIP }}:{{ $selectedPort }}",
     "port": "{{ $selectedPort }}"
   }
       {{- $first = false }}
+      {{- end }}
     {{- end }}
   {{- end }}
 {{- end }}

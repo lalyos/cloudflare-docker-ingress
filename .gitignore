@@ -4,3 +4,6 @@ config/
 *.log
 *.bak
 *.json
+*.jpeg
+*.png
+.DS_Store

@@ -18,38 +18,40 @@ Automatic Cloudflare Tunnel ingress controller for Docker containers using conve
 
 - Docker and Docker Compose installed
 - Cloudflare account with a domain
-- Cloudflare API token with permissions:
+
+
+## Step 1: Configure Environment Variables
+
+**Recommended:** Run the setup wizard to automatically generate your `.env`:
+
+```bash
+./setup.sh
+```
+
+Or manually fill in the values:
+
+- `CLOUDFLARE_API_TOKEN` - API token (create at https://dash.cloudflare.com/profile/api-tokens)
+- `CLOUDFLARE_DOMAIN` - Your domain (e.g., `example.com`)
+- `CLOUDFLARE_ZONE_ID` - Zone ID for your domain (dashboard/select domain/scroll down/bottom right)
+- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID (same as above)
+- `CLOUDFLARE_TUNNEL_NAME` - Name for your tunnel (e.g., `docker-tunnel`)
+
+- The Cloudflare API token needs following permissions:
   - `Account.Cloudflare Tunnel:Edit`
   - `Zone.DNS:Edit`
 
-### 2. Setup
-
-Clone or create this project, then configure your environment:
-
-```bash
-# Copy example environment file
-cp .env.example .env
-
-# Edit .env with your Cloudflare credentials
-```
+- See: "Manual API Token Setup" below
 
 ### 3. Start the Tunnel Manager
 
 ```bash
-docker-compose up -d cloudflare-tunnel-manager
+docker-compose up -d
 ```
 
-This will create your Cloudflare tunnel and start monitoring containers.
+This will start both:
+- **Tunnel Manager** - Monitors Docker containers, creates DNS records, and pushes ingress configuration
+- **Cloudflared** - Establishes the tunnel connection using the token from `.env`
 
-### 4. Start Cloudflared
-
-The `setup.sh` script creates a remotely-managed tunnel and saves all configuration to `.env`. Start cloudflared to establish the connection:
-
-```bash
-docker-compose up -d cloudflared
-```
-
-The tunnel configuration (ingress rules) is managed via the Cloudflare API, so routes update automatically without restarting `cloudflared`.
 
 ### 5. Deploy Your Applications
 
@@ -123,77 +125,6 @@ services:
       - "8081"
 ```
 
-## Examples
-
-### Example 1: Basic Web Server
-
-```yaml
-services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80"
-```
-
-**Result**: Accessible at `nginx.yourdomain.com`
-
-### Example 2: API with Custom Hostname
-
-```yaml
-services:
-  api:
-    image: my-api:latest
-    labels:
-      cloudflare.tunnel.hostname: "api.example.com"
-    ports:
-      - "3000"
-```
-
-**Result**: Accessible at `api.example.com`
-
-### Example 3: Multiple Services
-
-```yaml
-services:
-  frontend:
-    image: my-frontend
-    ports:
-      - "80"
-
-  backend:
-    image: my-backend
-    ports:
-      - "8080"
-
-  admin:
-    image: my-admin
-    labels:
-      cloudflare.tunnel.enable: "false"
-    ports:
-      - "9000"
-```
-
-**Result**:
-- `frontend.yourdomain.com` → frontend:80
-- `backend.yourdomain.com` → backend:8080
-- admin service is not exposed
-
-### Example 4: Multi-Port Container
-
-```yaml
-services:
-  app:
-    image: multi-port-app
-    labels:
-      cloudflare.tunnel.port: "8080"
-    ports:
-      - "8080"
-      - "8081"
-      - "9090"
-```
-
-**Result**: Only port 8080 is exposed at `app.yourdomain.com`
-
 ## How It Works
 
 1. **docker-gen** monitors Docker events for container changes
@@ -208,80 +139,10 @@ services:
 
 **Note:** This tool creates a remotely-managed tunnel and pushes configuration via API. Routes update automatically without restarting `cloudflared`. You'll need to run `cloudflared` separately to establish the actual tunnel connection. See [Running Cloudflared](#running-cloudflared) below.
 
-## Running Cloudflared
-
-After the tunnel manager creates your tunnel and DNS records, you need to run `cloudflared` to establish the connection.
-
-### Option 1: Docker Compose (Recommended)
-
-Add cloudflared to your `docker-compose.yml`:
-
-```yaml
-services:
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    restart: unless-stopped
-    depends_on:
-      - cloudflare-tunnel-manager
-```
-
-### Option 2: Manual Setup
-
-Run cloudflared with the token from your `.env`:
-
-```bash
-source .env
-docker run -d \
-  --name cloudflared \
-  cloudflare/cloudflared:latest \
-  tunnel run --token $CLOUDFLARE_TUNNEL_TOKEN
-```
-
-### Verify Tunnel is Running
-
-```bash
-# Check cloudflared logs
-docker logs cloudflared
-
-# You should see: "Connection established"
-```
 
 ## Troubleshooting
 
-### Check Manager Logs
-
-```bash
-docker logs cloudflare-tunnel-manager
-```
-
-### Verify Configuration
-
-```bash
-# Check generated config
-cat config/tunnel-config.json
-
-# Check tunnel state
-cat config/tunnel-state.json
-```
-
-### Common Issues
-
-**Containers not getting tunnels:**
-- Ensure container has exactly one exposed port, or add `cloudflare.tunnel.port` label
-- Check `cloudflare.tunnel.enable` is not set to "false"
-
-**DNS not resolving:**
-- Verify Cloudflare API token has DNS edit permissions
-- Check zone ID matches your domain
-- Allow a few minutes for DNS propagation
-
-**Tunnel creation fails:**
-- Verify API token has Tunnel edit permissions
-- Check account ID is correct
-- Ensure tunnel name doesn't contain special characters
-
-## API Token Setup
+### Manual API Token Setup
 
 1. Go to https://dash.cloudflare.com/profile/api-tokens
 2. Click "Create Token"
@@ -292,25 +153,36 @@ cat config/tunnel-state.json
 5. Set zone resources to include your domain
 6. Create token and copy to `.env` file
 
-## Project Structure
+### Check Logs
 
-```
-.
-├── docker-compose.yml          # Main compose file
-├── .env.example                # Environment template
-├── templates/
-│   └── tunnel-config.tmpl      # docker-gen template
-├── scripts/
-│   └── update-tunnel.sh        # Cloudflare API script
-└── config/                     # Generated configs (git-ignored)
-    ├── tunnel-config.json      # Current container routes
-    └── tunnel-state.json       # Previous state for diff
+```bash
+# Check tunnel manager logs
+docker logs cloudflare-tunnel-manager
+
+# Check cloudflared logs
+docker logs cloudflared
+
+# Should see: "Registered tunnel connection"
 ```
 
-## License
+### Common Issues
 
-MIT
+**Cloudflared won't start**
+- Check that `CLOUDFLARE_TUNNEL_TOKEN` is set in `.env`
+- Check cloudflared logs: `docker logs cloudflared`
 
-## Contributing
+**DNS not resolving:**
+- Wait a few minutes for DNS propagation
+- Check Cloudflare DNS records in your dashboard
+- Verify the tunnel manager is running: `docker logs cloudflare-tunnel-manager`
 
-Issues and pull requests welcome!
+**Tunnel creation fails:**
+- Verify API token has Tunnel edit permissions
+- Check account ID is correct
+- Ensure tunnel name doesn't contain special characters
+
+**Containers not getting tunnels**
+
+- Ensure container has exactly ONE exposed port
+- Or add label: `cloudflare.tunnel.port=8080`
+- Check generated config: `cat config/tunnel-config.json`
